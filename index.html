@@ -5,15 +5,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>QGIS2Web Portal</title>
 
-  <!-- Asosiy minimal CSS -->
+  <!-- CSS fayllar (asosiy) -->
+  <link rel="stylesheet" href="./resources/ol.css">
+  <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+  <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+  <link rel="stylesheet" href="./resources/qgis2web.css">
+
   <style>
     html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; background: #fff; }
     .ol-control > * {
         background-color: #f8f8f8!important; color: #444!important; border-radius: 0;
     }
     .ol-control { background-color: rgba(255,255,255,.4)!important; padding: 2px!important; }
-    .ol-popup { display: none; }
-    /* Yuklanish animatsiyasi */
+    /* Yuklanish oynasi */
     #loader {
         position: fixed; z-index: 1000; top: 0; left: 0;
         width: 100%; height: 100%; background: #fff;
@@ -27,48 +31,45 @@
     }
     @keyframes spin { 100% { transform: rotate(360deg); } }
   </style>
-
-  <!-- Tez yuklanadigan asosiy OL CSS -->
-  <link rel="preload" href="./resources/ol.css" as="style" onload="this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="./resources/ol.css"></noscript>
 </head>
 
 <body>
-  <!-- Yuklanish paytidagi ekran -->
   <div id="loader">
     <div>
       <div class="spinner"></div>
-      <p style="margin-top:10px;">Yuklanmoqda...</p>
+      <p style="margin-top:10px;">Xarita yuklanmoqda...</p>
     </div>
   </div>
 
-  <div id="map"></div>
+  <div id="map">
+      <div id="popup" class="ol-popup">
+          <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+          <div id="popup-content"></div>
+      </div>
+  </div>
 
-  <!-- Minimal kerakli JS faqat xaritani ko‘rsatish uchun -->
+  <!-- OpenLayers asosiy kutubxonalari -->
   <script src="./resources/ol.js"></script>
+  <script src="./resources/ol-layerswitcher.js"></script>
 
   <script>
-  // Xaritaning boshlang‘ich ko‘rinishini tez yuklash
+  // 1️⃣ Birinchi bo‘lib minimal xaritani yuklaymiz (bo‘sh asosiy ko‘rinish)
   const map = new ol.Map({
       target: 'map',
-      layers: [
-          new ol.layer.Tile({
-              source: new ol.source.OSM()
-          })
-      ],
+      layers: [ new ol.layer.Tile({ source: new ol.source.OSM() }) ],
       view: new ol.View({
-          center: ol.proj.fromLonLat([70.214, 40.384]), // O‘zbekiston markaziy koordinatasi
-          zoom: 7
+          center: ol.proj.fromLonLat([70.214, 40.384]), // O‘zbekiston markazida
+          zoom: 7,
+          maxZoom: 28, minZoom: 1
       })
   });
 
-  // Yuklanish tugaganda qolgan JS fayllarni yuklash
-  window.addEventListener('load', () => {
+  // 2️⃣ Keyin butun QGIS qatlamlarini fon rejimida yuklaymiz
+  window.addEventListener('load', async () => {
       const scripts = [
           "resources/qgis2web_expressions.js",
           "resources/polyfills.js",
           "resources/functions.js",
-          "resources/ol-layerswitcher.js",
           "layers/__1.js",
           "layers/22_2.js",
           "layers/21072025_3.js",
@@ -80,36 +81,49 @@
           "resources/qgis2web.js"
       ];
 
-      scripts.forEach(src => {
-          const s = document.createElement('script');
-          s.src = src;
-          s.defer = true;
-          document.body.appendChild(s);
+      for (const src of scripts) {
+          await loadScript(src);
+      }
+
+      // Layer switcher qo‘shish
+      const layerSwitcher = new ol.control.LayerSwitcher({
+          tipLabel: 'Qatlamlarni tanlash',
+          groupSelectStyle: 'children'
       });
+      map.addControl(layerSwitcher);
 
       // Loaderni olib tashlash
       document.getElementById('loader').style.display = 'none';
   });
 
-  // GPS joylashuv tugmasi
+  // Skriptni yuklash funksiyasi
+  function loadScript(src) {
+      return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.defer = true;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.body.appendChild(s);
+      });
+  }
+
+  // 3️⃣ GPS joylashuv tugmasi
   class MyLocationControl extends ol.control.Control {
       constructor(opt_options) {
           const options = opt_options || {};
           const button = document.createElement('button');
           button.innerHTML = '<i class="fas fa-location-arrow"></i>';
           button.title = 'Mening joyim';
-
           const element = document.createElement('div');
           element.className = 'ol-control ol-unselectable';
           element.style.top = '65px';
           element.style.left = '5px';
           element.style.position = 'absolute';
           element.appendChild(button);
-
           super({ element: element, target: options.target });
           button.addEventListener('click', this.handleLocate.bind(this), false);
       }
-
       handleLocate() {
           if ("geolocation" in navigator) {
               navigator.geolocation.getCurrentPosition((pos) => {
